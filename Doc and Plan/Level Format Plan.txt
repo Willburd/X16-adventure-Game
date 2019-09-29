@@ -1,0 +1,88 @@
+640*480 screen at scale factor 4 160*120
+10*8 tiles on screen
+cut out first row for hud on top/bottom
+gameplay area is 10*7
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+===================================
+LEVEL FORMAT FOR HIMEM STORAGE
+===================================
+
+==Tile format:
+8x8 sub tiles?
+Each bit is a color index to the palette 0-F.
+Each tile is two bytes wide (16px)
+each tile is 32 bytes large total
+
+
+==Dungeon tileset structure
+TL wall, TT wall , TR wall , FloorA  , FloorB  , normalSteps, StairsDown, StairsUp 
+LL wall, Ceiling , RR wall , chestC  , chestO  , bosschestC , switchWait, switchpressed
+BL wall, BB wall , BR wall , shutter^, shutterv, shutter<   , shutter>  , Blocks
+PotRock, flrtorch, littorch, locked^ , lockedv , locked<    , locked>   , keyblock
+lowwat , medwater, deepwat , Dopen^  , Dopenv  , Dopen<     , Dopen>    , toggleswitch
+TorchF1, TorchF2 , TorchF3 , FreeA   , FreeB   , FreeC      , toggwallUp, toggwalldown
+^auto animate
+
+8 * 6 level tileset size
+each tile 32bytes. 
+1536 / 8192 bytes used
+
+NOTE: it you use a tile above 47, it will index into global tiles loaded from the game's startup(likely overworld tiles and object graphics) 
+
+
+==Screenformat
+graphical data:
+10 by 7 tiles each.
+each byte is an index into the above tileset structure
+70 bytes graphically
+
+extra data:
+roomItem byte: FF none, all the rest are checked by the mainloop for what it is. all items are loaded in main code.
+roomFlag warpmap goal byte: 0-256 ram bank
+roomFlag doorwarp goal X/Y byte: (upper/lower for X and Y 16 max on each)
+roomFlag sidewarp goal X/Y byte: (upper/lower for X and Y 16 max on each)
+roomFlag byte1: (used for anything)
+roomFlag byte2: (used for anything)
+shutters unlock byte: 00 auto open, 01 all enemies, 02 push button, 03 lit torches, 04 collected all items, 05 never open
+70 + 7 bytes
+
+
+object data(enemies and gameplay objects):
+object type byte
+start tile X/Y byte (upper/lower for X and Y 16 max on each)
+object quirk byte (used for anything)
+3 bytes each, 8 entries
+24 bytes total
+70 + 7 + 24 = 101 bytes each
+
+
+64 (8*8 grid) screens max per dungeon
+6464 bytes total
+8000 / 8192 bytes used
+
+
+==palette data
+16 colors * 2bytes(xR,GB)
+32 bytes per palette
+6 palettes = 192 bytes
+8192 / 8192 bytes used
+
+
+Oh cool I hit the limit exactly. lol.
+
+
