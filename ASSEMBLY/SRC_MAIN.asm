@@ -18,6 +18,16 @@ KERNAL_SETLFS=$FFBA						; Set filesystem   		A = Logical number	; X = Device nu
 KERNAL_LOAD=$FFD5						; LOAD file to memory	A = load/verify		; X = LO goal address	; Y = HI goal address
 KERNAL_SAVE=$FFD8						; SAVE file to disk
 
+; VERA interface
+VERA_ADD_HI=$9F22 						; IIIIAAAA 20 bit address, incrimenter at top
+VERA_ADD_MI=$9F21 						; MMMMMMMM 20 bit address
+VERA_ADD_LO=$9F20						; LLLLLLLL 20 bit address
+VERA_DATA0=$9F23	
+VERA_DATA1=$9F24					
+VERA_CONTROL=$9F25						; R------A R=reset, A=port1/2
+VERA_IEN=$9F26							; ----USLV Uart, Sprcol, Line, Vsync  ; interupt clearing, write 1 to the interupt to clear it
+VERA_ISR=$9F27							; ----USLV Uart, Sprcol, Line, Vsync  ; interupt output
+
 ; ZP registers
 R0=$00
 R1=$01
@@ -34,19 +44,64 @@ R9=$09
 *=$7000
 
 
-
 *=$0810
 ; GAMECODE START
 	; default video data just incase
 	JSR KERNAL_CINT
-*=$0813 ; debug help
-	; Output test text
-	LDA	#<STRING_00
-	STA+1 R0
-	LDA	#>STRING_00
-	STA+1 R1
-	JSR outputString
 
+	; init video controller
+	LDA #%00000000
+	STA VERA_CONTROL
+	
+	; Display composer setup
+	LDA #$1f
+	LDY #$00
+	LDX #$00
+	JSR setVERAHml
+	; Set screen scale factor
+	;     F----COO	; C chroma disable, OO output mode
+	LDA #%00000001
+	STA VERA_DATA1
+	LDA #$64			; 128 = 1x, 64 = 2x
+	STA VERA_DATA1
+	LDA #$64	 		; 128 = 1x, 64 = 2x
+	STA VERA_DATA1
+	
+	
+	; palette setup
+	LDA #$1f
+	LDY #$10
+	LDX #$00
+	JSR setVERAHml
+	
+	
+	; Layer Setup
+	LDA $1f
+	LDY $20
+	LDX $00
+	JSR setVERAHml
+	;     MMM----E ; Mode, Enable
+	LDA #%11100001
+	STA VERA_DATA1		;$40001	L0_CTRL1		--HWhhww	H=tile Height / W=tile Width / m=map height / w=map width
+	LDA #$00
+	STA VERA_DATA1		;$40002	L0_MAP_BASE_L 	LLLLLLLL	Map Base (9:2)
+	LDA #%00000000
+	STA VERA_DATA1		;$40003	L0_MAP_BASE_H	HHHHHHHH	Map Base (17:10)
+	LDA #$00
+	STA VERA_DATA1		;$40004	L0_TILE_BASE_L 	LLLLLLLL	Tile Base (9:2)
+	LDA #%00100000
+	LDA #$00
+	STA VERA_DATA1		;$40005	L0_TILE_BASE_H  HHHHHHHH	Tile Base (17:10)
+	; scroll data init
+	LDA #$00
+	LDA VERA_DATA1		;$40006	L0_HSCROLL_L	LLLLLLLL	Hscroll (7:0)
+	LDA #$00
+	LDA VERA_DATA1		;$40007	L0_HSCROLL_H 	----HHHH	Vscroll (11:8)
+	LDA #$00
+	LDA VERA_DATA1		;$40008	L0_VSCROLL_L  	LLLLLLLL	Hscroll (7:0)
+	LDA #$00
+	LDA VERA_DATA1		;$40009	L0_VSCROLL_H 	----HHHH	Vscroll (11:8)
+	
 	; change bank to 0
 	LDA	#$00
 	STA+1 R0
@@ -65,19 +120,35 @@ R9=$09
 	STA R4
 	JSR loadFile
 	
-	; change bank to 0
-	LDA	#$00
-	STA+1 R0
-	JSR changeBank
+	; Test time!
+	LDA #$10
+	LDY #$00
+	LDX #$00
+	JSR setVERAHml
+	; 
+	LDX #$10 + 1
+	LDY #$2C + 1
+	LDA #$00 + 1
+TestLoop:
+	STA VERA_DATA1
+	SEC
+	SBC #$01
+	BNE TestLoop
+	DEY
+	BNE TestLoop
+	DEX
+	BNE TestLoop
+	
 	
 	; Output test text
-	LDA	#<HIMEM
-	STA+1 R0
-	LDA	#>HIMEM
-	STA+1 R1
-	JSR outputString
+	; LDA	#<HIMEM
+	; STA+1 R0
+	; LDA	#>HIMEM
+	; STA+1 R1
+	; JSR outputString
 
 	; end game
+	jsr	KERNAL_CHRIN	; Wait for input
 	RTS
 
 	
@@ -123,6 +194,18 @@ loadFile_skip:
 	JSR KERNAL_LOAD
 	BCS outputErrorText    	; ($0879) if carry set, a load error has happened
     RTS
+	
+setVERAHml: ; ==================================== setVERAHml(HI A, MI Y, LO X)
+	; top half of A is the incrimenter for vera!
+	STA VERA_ADD_HI
+	STY VERA_ADD_MI
+	STX VERA_ADD_LO
+	RTS
+	
+loadGraphicsSet: ; =============================== loadGraphicsSet() run after a level file is loaded, assumes format
+	; tile color is in NES interleaved first 8 bytes are bit 0 of color index, second set controls bit 1
+	
+	RTS
 	
 
 outputErrorText: ; =============================== outputErrorText( reads from A)
