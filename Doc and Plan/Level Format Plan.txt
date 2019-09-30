@@ -21,6 +21,7 @@ gameplay area is 10*7
 ===================================
 LEVEL FORMAT FOR HIMEM STORAGE
 ===================================
+First row is header, NES tile format using TileLayer pro
 
 ==Tile format:
 8x8 sub tiles?
@@ -30,12 +31,12 @@ each tile is 32 bytes large total
 
 
 ==Dungeon tileset structure
-TL wall, TT wall , TR wall , FloorA  , FloorB  , normalSteps, StairsDown, StairsUp 
+TL wall, TT wall , TR wall , FloorA  , FloorB  , FloorC     , StairsDown, StairsUp 
 LL wall, Ceiling , RR wall , chestC  , chestO  , bosschestC , switchWait, switchpressed
 BL wall, BB wall , BR wall , shutter^, shutterv, shutter<   , shutter>  , Blocks
-PotRock, flrtorch, littorch, locked^ , lockedv , locked<    , locked>   , keyblock
-lowwat , medwater, deepwat , Dopen^  , Dopenv  , Dopen<     , Dopen>    , toggleswitch
-TorchF1, TorchF2 , TorchF3 , FreeA   , FreeB   , FreeC      , toggwallUp, toggwalldown
+TorchW1, TorchW2 , TorchW3 , locked^ , lockedv , locked<    , locked>   , keyblock
+Pittop , pitmid  , pitbot  , Dopen^  , Dopenv  , Dopen<     , Dopen>    , toggleswitch
+TorchF1, TorchF2 , TorchF3 , TorchXX , PotRock , steps      , toggwallUp, toggwalldown
 ^auto animate
 
 8 * 6 level tileset size
