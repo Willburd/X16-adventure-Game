@@ -22,11 +22,11 @@ KERNAL_SAVE=$FFD8						; SAVE file to disk
 VERA_ADD_HI=$9F22 						; IIIIAAAA 20 bit address, incrimenter at top
 VERA_ADD_MI=$9F21 						; MMMMMMMM 20 bit address
 VERA_ADD_LO=$9F20						; LLLLLLLL 20 bit address
-VERA_DATA0=$9F23	
-VERA_DATA1=$9F24					
+VERA_DATA0=$9F23						
+VERA_DATA1=$9F24						
 VERA_CONTROL=$9F25						; R------A R=reset, A=port1/2
-VERA_IEN=$9F26							; ----USLV Uart, Sprcol, Line, Vsync  ; interupt clearing, write 1 to the interupt to clear it
-VERA_ISR=$9F27							; ----USLV Uart, Sprcol, Line, Vsync  ; interupt output
+VERA_IEN=$9F26							; ----USLV Uart, Sprcol, Line, Vsync  ; interrupt clearing, write 1 to the interupt to clear it
+VERA_ISR=$9F27							; ----USLV Uart, Sprcol, Line, Vsync  ; interrupt output
 
 ; ZP registers
 R0=$00
@@ -42,31 +42,44 @@ R9=$09
 
 ; Ram table
 *=$7000
-
+RAM_MAINLOOPSPINNING: !byte $00 ; 0 false, 1 true, if this is true the game's frame updated has completed and is spinning till the next vsync. if false vsync interupts are ignored
+RAM_QUITGAME: !byte $00 ; 0 false, 1 true,
 
 *=$0810
-; GAMECODE START
+; BEGIN GAME SETUP!
 	; default video data just incase
 	JSR KERNAL_CINT
 
+	; halt interupts till ready
+	LDA #$00
+	STA VERA_IEN
+	
+	; Output test text
+	LDA	#<STRING_00
+	STA+1 R0
+	LDA	#>STRING_00
+	STA+1 R1
+	JSR outputString
+	
 	; init video controller
 	LDA #%00000000
 	STA VERA_CONTROL
 	
 	; Display composer setup
-	LDA #$1f
+	LDA #$14
 	LDY #$00
-	LDX #$00
+	LDX #$40
 	JSR setVERAHml
 	; Set screen scale factor
-	;     F----COO	; C chroma disable, OO output mode
+	;     -----COO	; C chroma disable, OO output mode
 	LDA #%00000001
-	STA VERA_DATA1
+	STA VERA_DATA0
 	LDA #$64			; 128 = 1x, 64 = 2x
-	STA VERA_DATA1
+	STA VERA_DATA0
 	LDA #$64	 		; 128 = 1x, 64 = 2x
-	STA VERA_DATA1
-	
+	STA VERA_DATA0
+	LDA #$00	 		; border color
+	STA VERA_DATA0
 	
 	; palette setup
 	LDA #$1f
@@ -80,32 +93,29 @@ R9=$09
 	LDY $20
 	LDX $00
 	JSR setVERAHml
-	;     MMM----E ; Mode, Enable
+	; begin layer data
 	LDA #%11100001
-	STA VERA_DATA1		;$40001	L0_CTRL1		--HWhhww	H=tile Height / W=tile Width / m=map height / w=map width
+	STA VERA_DATA0		;$20001					MMM----E ; Mode, Enable
+	LDA #%00000000			
+	STA VERA_DATA0		;$20001	L0_CTRL1		--HWhhww	H=tile Height / W=tile Width / m=map height / w=map width, 32x32 map
 	LDA #$00
-	STA VERA_DATA1		;$40002	L0_MAP_BASE_L 	LLLLLLLL	Map Base (9:2)
+	STA VERA_DATA0		;$20002	L0_MAP_BASE_L 	LLLLLLLL	Map Base (9:2)
 	LDA #%00000000
-	STA VERA_DATA1		;$40003	L0_MAP_BASE_H	HHHHHHHH	Map Base (17:10)
+	STA VERA_DATA0		;$20003	L0_MAP_BASE_H	HHHHHHHH	Map Base (17:10)
 	LDA #$00
-	STA VERA_DATA1		;$40004	L0_TILE_BASE_L 	LLLLLLLL	Tile Base (9:2)
+	STA VERA_DATA0		;$20004	L0_TILE_BASE_L 	LLLLLLLL	Tile Base (9:2)
 	LDA #%00100000
 	LDA #$00
-	STA VERA_DATA1		;$40005	L0_TILE_BASE_H  HHHHHHHH	Tile Base (17:10)
+	STA VERA_DATA0		;$20005	L0_TILE_BASE_H  HHHHHHHH	Tile Base (17:10)
 	; scroll data init
 	LDA #$00
-	LDA VERA_DATA1		;$40006	L0_HSCROLL_L	LLLLLLLL	Hscroll (7:0)
+	LDA VERA_DATA0		;$20006	L0_HSCROLL_L	LLLLLLLL	Hscroll (7:0)
 	LDA #$00
-	LDA VERA_DATA1		;$40007	L0_HSCROLL_H 	----HHHH	Vscroll (11:8)
+	LDA VERA_DATA0		;$20007	L0_HSCROLL_H 	----HHHH	Vscroll (11:8)
 	LDA #$00
-	LDA VERA_DATA1		;$40008	L0_VSCROLL_L  	LLLLLLLL	Hscroll (7:0)
+	LDA VERA_DATA0		;$20008	L0_VSCROLL_L  	LLLLLLLL	Hscroll (7:0)
 	LDA #$00
-	LDA VERA_DATA1		;$40009	L0_VSCROLL_H 	----HHHH	Vscroll (11:8)
-	
-	; change bank to 0
-	LDA	#$00
-	STA+1 R0
-	JSR changeBank
+	LDA VERA_DATA0		;$20009	L0_VSCROLL_H 	----HHHH	Vscroll (11:8)
 	
 	; Load level0 to bank0
 	LDA+1 #(FILE_00_END - FILE_00) ; string length
@@ -120,17 +130,71 @@ R9=$09
 	STA R4
 	JSR loadFile
 	
-	; Test time!
+	; ready for interupts!
+	LDA #$01
+	STA VERA_IEN
+	
+	; clear VERA interrupts
+	LDA #%00001111
+	STA VERA_ISR
+	
+	; READY FOR FRAME UPDATE LOOPS
+	LDA #$01
+	STA RAM_MAINLOOPSPINNING
+	
+CORELOOP: ; spin until Vsync begins
+	LDA #$01
+	CMP RAM_QUITGAME
+	BEQ forceExitProgram ; user quit game!
+	JMP CORELOOP
+	
+	
+	
+UPDATE: ; VSYNC INTERRUPT TRIGGERED
+	; Check if coreloop is spinning
+	LDA #$01
+	CMP RAM_MAINLOOPSPINNING
+	BEQ UPDATEREADY
+	RTI ; it wasn't, return to it.
+UPDATEREADY:
+	; coreloop was spinning, we are ready for a new update! We are no longer spinning!
+	LDA #$00
+	STA RAM_MAINLOOPSPINNING
+	; ========== update game states for next frame
+	JSR TestStart
+	
+	; ========== update sprites and tiles to their new locations on screen!
+	
+	
+	; game update loop is ready we've entered spinning!
+	LDA #$01
+	STA RAM_MAINLOOPSPINNING
+	; clear VERA VSYNC interrupt
+	LDA VERA_ISR
+	ORA #%00000001
+	STA VERA_ISR
+	RTI	; RETURN FROM INTERUPT!
+
+	
+; Test time!
+TestStart:
+	; Output test string
+	LDA	#<STRING_01
+	STA+1 R0
+	LDA	#>STRING_01
+	STA+1 R1
+	JSR outputString
+	; actual test
 	LDA #$10
 	LDY #$00
 	LDX #$00
 	JSR setVERAHml
-	; 
+	; begin screen loop
 	LDX #$10 + 1
 	LDY #$2C + 1
 	LDA #$00 + 1
 TestLoop:
-	STA VERA_DATA1
+	STA VERA_DATA0
 	SEC
 	SBC #$01
 	BNE TestLoop
@@ -138,17 +202,6 @@ TestLoop:
 	BNE TestLoop
 	DEX
 	BNE TestLoop
-	
-	
-	; Output test text
-	; LDA	#<HIMEM
-	; STA+1 R0
-	; LDA	#>HIMEM
-	; STA+1 R1
-	; JSR outputString
-
-	; end game
-	jsr	KERNAL_CHRIN	; Wait for input
 	RTS
 
 	
@@ -287,6 +340,8 @@ FILE_03_END: 				; String end
 ; String Table
 STRING_00:					!text "ATTEMPTING TO LOAD DATA ON DISK...", $0D, 0
 STRING_00_END: 				; String end
+STRING_01:					!text "RESTART TEST", $0D, 0
+STRING_01_END: 				; String end
 STRING_DEVICEERROR: 		!text "A PROBLEM WITH THE DEVICE OCCURRED", $0D, 0
 STRING_DEVICEERROR_END: 	; String end
 STRING_NOFILE:				!text "FILE WAS NOT FOUND", $0D, 0
