@@ -145,8 +145,24 @@ RAM_QUITGAME: !byte $00 ; 0 false, 1 true,
 CORELOOP: ; spin until Vsync begins
 	LDA #$01
 	CMP RAM_QUITGAME
-	BEQ forceExitProgram ; user quit game!
+	BEQ CORELOOP_quit
 	JMP CORELOOP
+CORELOOP_quit:
+	JSR forceExitProgram ; user quit game!
+	
+	
+	
+IRQ: ; Compared each interupt flag and jump
+	LDA VERA_IEN
+	TAX
+	ORA #%00000001
+	CMP #%00000001
+	BEQ UPDATE ; Vsync START, handle game loop
+	TXA
+	; next check
+	RTI	; RETURN FROM INTERUPT!
+	
+	
 	
 	
 	
