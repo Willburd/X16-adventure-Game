@@ -47,12 +47,15 @@ RAM_QUITGAME: !byte $00 ; 0 false, 1 true,
 
 *=$0810
 ; BEGIN GAME SETUP!
-	; default video data just incase
-	JSR KERNAL_CINT
-
 	; halt interupts till ready
 	LDA #$00
 	STA VERA_IEN
+	
+	; set interrupt vector
+	LDA #<IRQ_HANDLE
+	STA $0314
+	LDA #>IRQ_HANDLE
+	STA $0315
 	
 	; Output test text
 	LDA	#<STRING_00
@@ -143,6 +146,13 @@ RAM_QUITGAME: !byte $00 ; 0 false, 1 true,
 	STA RAM_MAINLOOPSPINNING
 	
 CORELOOP: ; spin until Vsync begins
+	; Output test text
+	LDA	#<STRING_02
+	STA+1 R0
+	LDA	#>STRING_02
+	STA+1 R1
+	JSR outputString
+
 	LDA #$01
 	CMP RAM_QUITGAME
 	BEQ CORELOOP_quit
@@ -151,19 +161,17 @@ CORELOOP_quit:
 	JSR forceExitProgram ; user quit game!
 	
 	
-	
-IRQ: ; Compared each interupt flag and jump
-	LDA VERA_IEN
+IRQ_HANDLE ; interrupt handle
+	LDA VERA_ISR
 	TAX
 	ORA #%00000001
 	CMP #%00000001
-	BEQ UPDATE ; Vsync START, handle game loop
+	BEQ IRQ_skip1
+	JSR UPDATE ; Vsync START, handle game loop
+IRQ_skip1:
 	TXA
 	; next check
-	RTI	; RETURN FROM INTERUPT!
-	
-	
-	
+	RTS	; RETURN FROM INTERUPT!
 	
 	
 UPDATE: ; VSYNC INTERRUPT TRIGGERED
@@ -171,7 +179,7 @@ UPDATE: ; VSYNC INTERRUPT TRIGGERED
 	LDA #$01
 	CMP RAM_MAINLOOPSPINNING
 	BEQ UPDATEREADY
-	RTI ; it wasn't, return to it.
+	RTS
 UPDATEREADY:
 	; coreloop was spinning, we are ready for a new update! We are no longer spinning!
 	LDA #$00
@@ -189,7 +197,7 @@ UPDATEREADY:
 	LDA VERA_ISR
 	ORA #%00000001
 	STA VERA_ISR
-	RTI	; RETURN FROM INTERUPT!
+	RTS
 
 	
 ; Test time!
@@ -358,6 +366,8 @@ STRING_00:					!text "ATTEMPTING TO LOAD DATA ON DISK...", $0D, 0
 STRING_00_END: 				; String end
 STRING_01:					!text "RESTART TEST", $0D, 0
 STRING_01_END: 				; String end
+STRING_02:					!text "SPINNING", $0D, 0
+STRING_02_END: 				; String end
 STRING_DEVICEERROR: 		!text "A PROBLEM WITH THE DEVICE OCCURRED", $0D, 0
 STRING_DEVICEERROR_END: 	; String end
 STRING_NOFILE:				!text "FILE WAS NOT FOUND", $0D, 0
