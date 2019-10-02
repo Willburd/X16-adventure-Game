@@ -42,6 +42,58 @@ R9=$09
 
 ; Ram table
 *=$7000
+IRQ_HANDLE ;IRQ easy debug location
+	LDA #%01111111
+	STA $DC0D
+	; store states
+	PHA        ;store register A in stack
+	TXA
+	PHA        ;store register X in stack
+	TYA
+	PHA        ;store register Y in stack
+	; begin interupt service routine
+	
+	; Output test text
+	LDA	#<STRING_02
+	STA+1 R0
+	LDA	#>STRING_02
+	STA+1 R1
+	JSR outputString
+	
+	; check if VERA interupt!
+	LDA VERA_ISR
+	TAX
+	ORA #%00000001
+	CMP #%00000001
+	BEQ IRQ_skip1
+	JSR UPDATE ; Vsync START, handle game loop
+IRQ_skip1:
+
+	; check next VERA interrupt
+	; TXA
+	; ORA #%00000001
+	; CMP #%00000001
+	; BEQ IRQ_skip1
+	; JSR UPDATE ; Vsync START, handle game loop
+; IRQ_skip1:
+	
+	; check 6502 interrupts
+	
+	; clear VERA interrupts
+	LDA VERA_ISR
+	ORA #%00001111
+	STA VERA_ISR
+	
+	; clear 6502 interrupt
+	LDA #$ff
+	STA $D019
+	
+	; return to kernal interupt
+	JMP $EA31
+
+	
+	
+; begin ram proper
 RAM_MAINLOOPSPINNING: !byte $00 ; 0 false, 1 true, if this is true the game's frame updated has completed and is spinning till the next vsync. if false vsync interupts are ignored
 RAM_QUITGAME: !byte $00 ; 0 false, 1 true,
 
@@ -50,12 +102,6 @@ RAM_QUITGAME: !byte $00 ; 0 false, 1 true,
 	; halt interupts till ready
 	LDA #$00
 	STA VERA_IEN
-	
-	; set interrupt vector
-	LDA #<IRQ_HANDLE
-	STA $0314
-	LDA #>IRQ_HANDLE
-	STA $0315
 	
 	; Output test text
 	LDA	#<STRING_00
@@ -120,6 +166,7 @@ RAM_QUITGAME: !byte $00 ; 0 false, 1 true,
 	LDA #$00
 	LDA VERA_DATA0		;$20009	L0_VSCROLL_H 	----HHHH	Vscroll (11:8)
 	
+	
 	; Load level0 to bank0
 	LDA+1 #(FILE_00_END - FILE_00) ; string length
 	STA R2
@@ -141,38 +188,22 @@ RAM_QUITGAME: !byte $00 ; 0 false, 1 true,
 	LDA #%00001111
 	STA VERA_ISR
 	
+	; set interrupt vector
+	LDA #<IRQ_HANDLE
+	STA $0314
+	LDA #>IRQ_HANDLE
+	STA $0315
+	
 	; READY FOR FRAME UPDATE LOOPS
-	LDA #$01
 	STA RAM_MAINLOOPSPINNING
 	
 CORELOOP: ; spin until Vsync begins
-	; Output test text
-	LDA	#<STRING_02
-	STA+1 R0
-	LDA	#>STRING_02
-	STA+1 R1
-	JSR outputString
-
 	LDA #$01
 	CMP RAM_QUITGAME
 	BEQ CORELOOP_quit
 	JMP CORELOOP
 CORELOOP_quit:
 	JSR forceExitProgram ; user quit game!
-	
-	
-IRQ_HANDLE ; interrupt handle
-	LDA VERA_ISR
-	TAX
-	ORA #%00000001
-	CMP #%00000001
-	BEQ IRQ_skip1
-	JSR UPDATE ; Vsync START, handle game loop
-IRQ_skip1:
-	TXA
-	; next check
-	RTS	; RETURN FROM INTERUPT!
-	
 	
 UPDATE: ; VSYNC INTERRUPT TRIGGERED
 	; Check if coreloop is spinning
@@ -193,10 +224,6 @@ UPDATEREADY:
 	; game update loop is ready we've entered spinning!
 	LDA #$01
 	STA RAM_MAINLOOPSPINNING
-	; clear VERA VSYNC interrupt
-	LDA VERA_ISR
-	ORA #%00000001
-	STA VERA_ISR
 	RTS
 
 	
@@ -339,6 +366,11 @@ outputErrorText_ERREND:
 
 
 forceExitProgram: ; ==================== forceExitProgram() kill game
+	LDA	#<STRING_03
+	STA+1 R0
+	LDA	#>STRING_03
+	STA+1 R1
+	JSR outputString
 	SEI
 	LDA #$37
 	STA $01
@@ -366,8 +398,10 @@ STRING_00:					!text "ATTEMPTING TO LOAD DATA ON DISK...", $0D, 0
 STRING_00_END: 				; String end
 STRING_01:					!text "RESTART TEST", $0D, 0
 STRING_01_END: 				; String end
-STRING_02:					!text "SPINNING", $0D, 0
+STRING_02:					!text "INTERRUPT", $0D, 0
 STRING_02_END: 				; String end
+STRING_03:					!text "GAME QUIT!", $0D, 0
+STRING_03_END: 				; String end
 STRING_DEVICEERROR: 		!text "A PROBLEM WITH THE DEVICE OCCURRED", $0D, 0
 STRING_DEVICEERROR_END: 	; String end
 STRING_NOFILE:				!text "FILE WAS NOT FOUND", $0D, 0
