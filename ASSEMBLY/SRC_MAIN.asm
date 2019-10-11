@@ -25,8 +25,8 @@ VERA_ADD_LO=$9F20						; LLLLLLLL 20 bit address
 VERA_DATA0=$9F23	
 VERA_DATA1=$9F24					
 VERA_CONTROL=$9F25						; R------A R=reset, A=port1/2
-VERA_IEN=$9F26							; ----USLV Uart, Sprcol, Line, Vsync  ; interupt clearing, write 1 to the interupt to clear it
-VERA_ISR=$9F27							; ----USLV Uart, Sprcol, Line, Vsync  ; interupt output
+VERA_IEN=$9F26							; interupt enable, write #$01 to enable interrupts
+VERA_ISR=$9F27							; interrupt cleaning, write #$01 to clean interrupts
 
 ; ZP registers
 R0=$00
@@ -42,13 +42,13 @@ R9=$09
 
 ; Ram table
 *=$7000
-
+RAM_QuitGame: !byte $00
 
 *=$0810
 ; GAMECODE START
 	; default video data just incase
 	JSR KERNAL_CINT
-
+	
 	; init video controller
 	LDA #%00000000
 	STA VERA_CONTROL
@@ -120,6 +120,52 @@ R9=$09
 	STA R4
 	JSR loadFile
 	
+	; BEGIN GAME!
+	LDA #$01
+	STA VERA_IEN
+	STA VERA_ISR
+	JSR CORELOOP
+	
+	
+	
+; hanging loop waiting for vera vsync interrupt
+CORELOOP:
+	CLC
+	CLV
+	LDA RAM_QuitGame;
+	CMP #$01
+	BEQ quitgame
+	LDA VERA_ISR ; Load status of VERA interrupts
+	CMP #$01
+	BEQ updateready:
+	JMP CORELOOP ; if not loop back
+updateready:
+	JSR UPDATE ; if VERA interrupt triggered!
+	JMP CORELOOP ; loop back after returning
+quitgame:
+	JSR forceExitProgram
+	RTS
+; =================================================================
+;	CORE GAME UPDATE LOOP, CALLED ON VSYNC! if this misses a frame it just waits until the next sync
+; =================================================================
+UPDATE:
+	LDA #$00
+	STA VERA_IEN
+	; update game logic!
+
+	; graphics update
+	JSR Teststart
+	
+	; clear interrupts
+	LDA #$01
+	STA VERA_IEN
+	STA VERA_ISR
+	RTS
+	
+	
+	
+	
+Teststart:
 	; Test time!
 	LDA #$10
 	LDY #$00
@@ -138,17 +184,6 @@ TestLoop:
 	BNE TestLoop
 	DEX
 	BNE TestLoop
-	
-	
-	; Output test text
-	; LDA	#<HIMEM
-	; STA+1 R0
-	; LDA	#>HIMEM
-	; STA+1 R1
-	; JSR outputString
-
-	; end game
-	jsr	KERNAL_CHRIN	; Wait for input
 	RTS
 
 	
@@ -297,3 +332,5 @@ STRING_BREAKERROR:			!text "LOADING INTERRUPTED", $0D, 0
 STRING_BREAKERROR_END: 		; String end
 STRING_MISSINGERROR:		!text "MISSING FILE NAME", $0D, 0
 STRING_MISSINGERROR_END:	; String end
+STRING_01:					!text "VSYNC", $0D, 0
+STRING_01_END:				; String end
