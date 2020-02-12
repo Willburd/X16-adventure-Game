@@ -25,7 +25,7 @@ VERA_ADD_LO=$9F20						; LLLLLLLL 20 bit address
 VERA_DATA0=$9F23	
 VERA_DATA1=$9F24					
 VERA_CONTROL=$9F25						; R------A R=reset, A=port1/2
-VERA_IEN=$9F26							; interupt enable, write #$01 to enable interrupts
+VERA_IEN=$9F26							; interrupt enable, write #$01 to enable interrupts
 VERA_ISR=$9F27							; interrupt cleaning, write #$01 to clean interrupts
 
 ; ZP registers
@@ -42,12 +42,22 @@ R9=$09
 
 ; Ram table
 *=$7000
+RAM_ORG_IRQ_LO: !byte $00
+RAM_ORG_IRQ_HI: !byte $00
 RAM_QuitGame: !byte $00
+RAM_UpdateReady: !byte $00
+
 
 *=$0810
 ; GAMECODE START
 	; default video data just incase
 	JSR KERNAL_CINT
+	
+	; capture interrupt vector
+	lda $0314
+    sta RAM_ORG_IRQ_LO
+    lda $0315
+    sta RAM_ORG_IRQ_HI
 	
 	; init video controller
 	LDA #%00000000
@@ -120,50 +130,60 @@ RAM_QuitGame: !byte $00
 	STA R4
 	JSR loadFile
 	
-	; BEGIN GAME!
+	; set new interrupt vector ; $089d
+	LDA #<VSYNC_ISR
+	STA $0314
+	LDA #>VSYNC_ISR
+	STA $0315
+	
+	; enabled VERA interrupts
 	LDA #$01
 	STA VERA_IEN
-	STA VERA_ISR
+	
+	; BEGIN GAME!
 	JSR CORELOOP
 	
-	
-	
-; hanging loop waiting for vera vsync interrupt
+; spinning loop waiting for vera vsync interrupt; $08ad
 CORELOOP:
-	CLC
-	CLV
+	; Set update flag to ready
+	LDA #$01
+	STA RAM_UpdateReady
+	; quit or do another loop
 	LDA RAM_QuitGame;
 	CMP #$01
 	BEQ quitgame
-	LDA VERA_ISR ; Load status of VERA interrupts
-	CMP #$01
-	BEQ updateready:
-	JMP CORELOOP ; if not loop back
-updateready:
-	JSR UPDATE ; if VERA interrupt triggered!
 	JMP CORELOOP ; loop back after returning
 quitgame:
 	JSR forceExitProgram
 	RTS
+	
+	
+	
 ; =================================================================
-;	CORE GAME UPDATE LOOP, CALLED ON VSYNC! if this misses a frame it just waits until the next sync
+;	CORE GAME UPDATE LOOP, CALLED ON VSYNC! if this misses a frame it just waits until the next sync;
 ; =================================================================
-UPDATE:
-	LDA #$00
-	STA VERA_IEN
+*=$1000 ; temp
+VSYNC_ISR:
+	lda VERA_ISR
+    CMP #$01
+    beq irq_done
+	LDA RAM_UpdateReady
+	CMP #$00
+	beq irq_done
+	
 	; update game logic!
-
-	; graphics update
 	JSR Teststart
 	
 	; clear interrupts
-	LDA #$01
-	STA VERA_IEN
-	STA VERA_ISR
-	RTS
+	lda #$01
+    sta VERA_ISR
 	
-	
-	
+irq_done:
+	; Return to Kernal handling:
+    jmp (RAM_ORG_IRQ_LO)
+
+   
+   
 	
 Teststart:
 	; Test time!
