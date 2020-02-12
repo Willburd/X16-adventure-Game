@@ -19,8 +19,8 @@ KERNAL_LOAD=$FFD5						; LOAD file to memory	A = load/verify		; X = LO goal addr
 KERNAL_SAVE=$FFD8						; SAVE file to disk
 
 ; VERA interface
-VERA_ADD_HI=$9F22 						; IIIIAAAA 20 bit address, incrimenter at top
-VERA_ADD_MI=$9F21 						; MMMMMMMM 20 bit address
+VERA_ADD_BK=$9F22 						; ssssBBBB 20 bit address, Bank and reading stride
+VERA_ADD_HI=$9F21 						; HHHHHHHH 20 bit address
 VERA_ADD_LO=$9F20						; LLLLLLLL 20 bit address
 VERA_DATA0=$9F23	
 VERA_DATA1=$9F24					
@@ -64,54 +64,37 @@ RAM_UpdateReady: !byte $00
 	STA VERA_CONTROL
 	
 	; Display composer setup
-	LDA #$1f
+	LDA $1f
 	LDY #$00
 	LDX #$00
 	JSR setVERAHml
 	; Set screen scale factor
-	;     F----COO	; C chroma disable, OO output mode
+	;     -----COO	; C chroma disable, OO output mode
 	LDA #%00000001
 	STA VERA_DATA0
-	LDA #$64			; 128 = 1x, 64 = 2x
+	LDA #$40			; 128 = 1x, 64 = 2x
 	STA VERA_DATA0
-	LDA #$64	 		; 128 = 1x, 64 = 2x
+	LDA #$40			; 128 = 1x, 64 = 2x
 	STA VERA_DATA0
 	
-	
-	; palette setup
-	LDA #$1f
-	LDY #$10
-	LDX #$00
-	JSR setVERAHml
-	
-	
-	; Layer Setup
+	; Layer Settings
 	LDA $1f
 	LDY $20
 	LDX $00
 	JSR setVERAHml
 	;     MMM----E ; Mode, Enable
-	LDA #%11100001
-	STA VERA_DATA0		;$40001	L0_CTRL1		--HWhhww	H=tile Height / W=tile Width / m=map height / w=map width
-	LDA #$00
-	STA VERA_DATA0		;$40002	L0_MAP_BASE_L 	LLLLLLLL	Map Base (9:2)
-	LDA #%00000000
-	STA VERA_DATA0		;$40003	L0_MAP_BASE_H	HHHHHHHH	Map Base (17:10)
-	LDA #$00
-	STA VERA_DATA0		;$40004	L0_TILE_BASE_L 	LLLLLLLL	Tile Base (9:2)
-	LDA #%00100000
-	LDA #$00
-	STA VERA_DATA0		;$40005	L0_TILE_BASE_H  HHHHHHHH	Tile Base (17:10)
-	; scroll data init
-	LDA #$00
-	LDA VERA_DATA0		;$40006	L0_HSCROLL_L	LLLLLLLL	Hscroll (7:0)
-	LDA #$00
-	LDA VERA_DATA0		;$40007	L0_HSCROLL_H 	----HHHH	Vscroll (11:8)
-	LDA #$00
-	LDA VERA_DATA0		;$40008	L0_VSCROLL_L  	LLLLLLLL	Hscroll (7:0)
-	LDA #$00
-	LDA VERA_DATA0		;$40009	L0_VSCROLL_H 	----HHHH	Vscroll (11:8)
-	
+	LDA #%10100001
+	STA VERA_DATA0 ;   $02:0000 ; Mode and Enable flag for layer X.
+	; Layer X tilemap size.
+	; Layer X tilemap base address (low byte)
+	; Layer X tilemap base address (high byte)
+	; Layer X tile data base address (low byte)
+	; Layer X tile data base address (high byte)
+	; Layer X horizontal scroll (low byte)
+	; Layer X horizontal scroll (high byte, max of $0F)
+	; Layer X vertical scroll (low byte)
+	; Layer X vertical scroll (high byte, max of $0F)
+
 	; change bank to 0
 	LDA	#$00
 	STA+1 R0
@@ -187,7 +170,7 @@ irq_done:
 	
 Teststart:
 	; Test time!
-	LDA #$10
+	LDA #%00010000
 	LDY #$00
 	LDX #$00
 	JSR setVERAHml
@@ -252,8 +235,8 @@ loadFile_skip:
 	
 setVERAHml: ; ==================================== setVERAHml(HI A, MI Y, LO X)
 	; top half of A is the incrimenter for vera!
-	STA VERA_ADD_HI
-	STY VERA_ADD_MI
+	STA VERA_ADD_BK
+	STY VERA_ADD_HI
 	STX VERA_ADD_LO
 	RTS
 	
